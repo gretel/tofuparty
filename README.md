@@ -36,33 +36,6 @@ tofu output consumer_login
 
 Set via `TF_VAR_<name>` or `-var` flag.
 
-## Accounts
-
-| Volume | Access | Account |
-|--------|--------|---------|
-| `/w` | read/write/move/delete | admin |
-| `/w` | read/write + delete own uploads | consumer |
-| `/w/.logs` | server logs, admin only (hidden volume) | admin |
-
-Passwords auto-generated via `random_password`. Consumer can only delete files it uploaded itself (copyparty `unpost`, 10-year window); admin can delete anything at any time. Server logs are written to `/w/.logs` and reachable only via the dedicated admin-only volume mount. Add accounts by editing the `command` list in `ecs.tf`.
-
-## Files
-
-| File | Contents |
-|------|----------|
-| `versions.tf` | Provider constraints |
-| `data.tf` | Data sources (caller identity, region, partition) |
-| `variables.tf` | Input variables with defaults |
-| `locals.tf` | Derived locals (name, tags) |
-| `secrets.tf` | Auto-generated passwords |
-| `provider.tf` | AWS provider config |
-| `vpc.tf` | VPC, subnets, gateways, routing |
-| `efs.tf` | EFS filesystem, mount targets, access point |
-| `ecs.tf` | ECS cluster, IAM roles, task definition, service |
-| `alb.tf` | ALB, target group, listener |
-| `cloudfront.tf` | CloudFront distribution |
-| `outputs.tf` | Outputs |
-
 ## Teardown
 
 ```
