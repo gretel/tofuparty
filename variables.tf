@@ -68,4 +68,5 @@ variable "tailscale_auth_key" {
   description = "Tailscale auth key for the sidecar node (https://login.tailscale.com/admin/settings/keys)"
   type        = string
   sensitive   = true
+  ephemeral   = true # never written to state/plan files
 }

@@ -9,13 +9,9 @@ resource "random_password" "consumer" {
 }
 
 resource "aws_ssm_parameter" "tailscale_auth" {
-  name        = "/${local.name}/tailscale-auth-key"
-  description = "Tailscale auth key for the ECS sidecar node"
-  type        = "SecureString"
-  value       = var.tailscale_auth_key
-
-  # Rotate in the console/CLI without tofu touching it
-  lifecycle {
-    ignore_changes = [value]
-  }
+  name             = "/${local.name}/tailscale-auth-key"
+  description      = "Tailscale auth key for the ECS sidecar node"
+  type             = "SecureString"
+  value_wo         = var.tailscale_auth_key # write-only: kept in SSM, not in state
+  value_wo_version = 1
 }
