@@ -44,3 +44,24 @@ resource "aws_efs_access_point" "this" {
     }
   }
 }
+
+# Tailscale node state lives here (separate from served files, so the
+# node key is never visible in the copyparty web UI)
+resource "aws_efs_access_point" "tailscale" {
+  file_system_id = aws_efs_file_system.this.id
+
+  posix_user {
+    uid = 1000
+    gid = 1000
+  }
+
+  root_directory {
+    path = "/tsstate"
+
+    creation_info {
+      owner_uid   = 1000
+      owner_gid   = 1000
+      permissions = "700"
+    }
+  }
+}

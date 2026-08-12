@@ -33,6 +33,21 @@ resource "aws_iam_role_policy_attachment" "execution" {
   policy_arn = "arn:${data.aws_partition.current.partition}:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Lets ECS fetch the Tailscale auth key from Parameter Store at task start
+resource "aws_iam_role_policy" "execution_ssm" {
+  name = "ssm-get-tailscale-auth"
+  role = aws_iam_role.execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["ssm:GetParameters"]
+      Resource = [aws_ssm_parameter.tailscale_auth.arn]
+    }]
+  })
+}
+
 resource "aws_iam_role" "task" {
   name = "${local.name}-ecs-task"
 
@@ -60,7 +75,11 @@ resource "aws_iam_role_policy" "task_efs" {
         "elasticfilesystem:ClientMount",
         "elasticfilesystem:ClientWrite",
       ]
-      Resource = [aws_efs_file_system.this.arn]
+      Resource = [
+        aws_efs_file_system.this.arn,
+        aws_efs_access_point.this.arn,
+        aws_efs_access_point.tailscale.arn,
+      ]
     }]
   })
 }
@@ -174,7 +193,44 @@ resource "aws_ecs_task_definition" "this" {
         retries     = 3
         startPeriod = 60
       }
-    }
+    },
+    {
+      name      = "tailscale"
+      image     = "tailscale/tailscale:latest"
+      essential = false # copyparty keeps running if the sidecar fails
+
+      environment = [
+        # Fargate has no /dev/net/tun, so run in userspace mode
+        { name = "TS_USERSPACE", value = "true" },
+        # Stable node name in the tailnet
+        { name = "TS_HOSTNAME", value = local.name },
+        # Persist node identity + key on EFS (non-ephemeral node)
+        { name = "TS_STATE_DIR", value = "/var/lib/tailscale" },
+        # Subnet router for the VPC + built-in Tailscale SSH
+        { name = "TS_EXTRA_ARGS", value = "--advertise-routes=${var.vpc_cidr} --ssh" },
+      ]
+
+      secrets = [
+        { name = "TS_AUTHKEY", valueFrom = aws_ssm_parameter.tailscale_auth.arn },
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.this.name
+          "awslogs-region"        = data.aws_region.current.region
+          "awslogs-stream-prefix" = "tailscale"
+        }
+      }
+
+      mountPoints = [
+        {
+          sourceVolume  = "tsstate"
+          containerPath = "/var/lib/tailscale"
+          readOnly      = false
+        }
+      ]
+    },
   ])
 
   volume {
@@ -191,7 +247,21 @@ resource "aws_ecs_task_definition" "this" {
     }
   }
 
-  depends_on = [aws_efs_access_point.this]
+  volume {
+    name = "tsstate"
+
+    efs_volume_configuration {
+      file_system_id     = aws_efs_file_system.this.id
+      transit_encryption = "ENABLED"
+
+      authorization_config {
+        access_point_id = aws_efs_access_point.tailscale.id
+        iam             = "ENABLED"
+      }
+    }
+  }
+
+  depends_on = [aws_efs_access_point.this, aws_efs_access_point.tailscale]
 }
 
 resource "aws_security_group" "fargate" {

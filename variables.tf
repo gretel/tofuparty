@@ -63,3 +63,9 @@ variable "health_check_grace_period" {
   type        = number
   default     = 60
 }
+
+variable "tailscale_auth_key" {
+  description = "Tailscale auth key for the sidecar node (https://login.tailscale.com/admin/settings/keys)"
+  type        = string
+  sensitive   = true
+}
