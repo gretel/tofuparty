@@ -62,8 +62,11 @@ Notes:
   networking mode (`TS_USERSPACE=true`) — no privileged containers needed.
 - The node is non-ephemeral: its state (including the node key) persists on
   EFS under a dedicated access point (`/tsstate`), separate from served files.
-- The auth key is passed via Parameter Store (`/copyparty-demo/tailscale-auth-key`)
-  as an ECS secret, never as a plaintext env var.
+- Secrets are passed via Parameter Store as ECS secrets, never as plaintext
+  env vars: `/${local.name}/tailscale-auth-key`, `/admin-password`,
+  `/consumer-password`.
+  The input variables/values are marked ephemeral/write-only, so they never
+  land in the terraform state file.
 - The sidecar is non-essential: if Tailscale dies, copyparty keeps running.
 
 To create an auth key: https://login.tailscale.com/admin/settings/keys
@@ -76,7 +79,7 @@ To create an auth key: https://login.tailscale.com/admin/settings/keys
 | `/w` | read/write + delete own uploads | consumer |
 | `/w/.logs` | server logs, admin only (hidden volume) | admin |
 
-Passwords auto-generated via `random_password`. Consumer can only delete files it uploaded itself (copyparty `unpost`, 10-year window); admin can delete anything at any time. Server logs are written to `/w/.logs` and reachable only via the dedicated admin-only volume mount. Add accounts by editing the `command` list in `ecs.tf`.
+Passwords auto-generated via `random_password` and delivered to the container through Parameter Store (see the secrets note above). Consumer can only delete files it uploaded itself (copyparty `unpost`, 10-year window); admin can delete anything at any time. Server logs are written to `/w/.logs` and reachable only via the dedicated admin-only volume mount. Add accounts by editing the `command` list in `ecs.tf`.
 
 ## Files
 
@@ -86,7 +89,8 @@ Passwords auto-generated via `random_password`. Consumer can only delete files i
 | `data.tf` | Data sources (caller identity, region, partition) |
 | `variables.tf` | Input variables with defaults |
 | `locals.tf` | Derived locals (name, tags) |
-| `secrets.tf` | Auto-generated passwords, Tailscale auth key (SSM) |
+| `secrets.tf` | Generated passwords (`random_password`) |
+| `ssm.tf` | Parameter Store: tailscale auth key + copyparty passwords |
 | `provider.tf` | AWS provider config |
 | `vpc.tf` | VPC, subnets, gateways, routing |
 | `efs.tf` | EFS filesystem, mount targets, access points (data + tailscale state) |

@@ -41,9 +41,13 @@ resource "aws_iam_role_policy" "execution_ssm" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect   = "Allow"
-      Action   = ["ssm:GetParameters"]
-      Resource = [aws_ssm_parameter.tailscale_auth.arn]
+      Effect = "Allow"
+      Action = ["ssm:GetParameters"]
+      Resource = [
+        aws_ssm_parameter.tailscale_auth.arn,
+        aws_ssm_parameter.admin_password.arn,
+        aws_ssm_parameter.consumer_password.arn,
+      ]
     }]
   })
 }
@@ -134,8 +138,8 @@ resource "aws_ecs_task_definition" "this" {
       command = [
         "-v", "/w::rwmd,admin:rw,consumer:c,unp_who=3",
         "-v", "/w/.logs:.logs:rwmd,admin",
-        "-a", "admin:${random_password.admin.result}",
-        "-a", "consumer:${random_password.consumer.result}",
+        "-a", "admin:$${ADMIN_PW}", # password from SSM via ECS secret
+        "-a", "consumer:$${CONSUMER_PW}",
         "-e2ds", "-e2ts",
         "--no-robots",
         "--no-logues",
@@ -163,6 +167,12 @@ resource "aws_ecs_task_definition" "this" {
         { name = "PRTY_NO_DB_LOCK", value = "1" },
         { name = "PRTY_FFMPEG_BIN", value = "/usr/bin/ffmpeg" },
         { name = "PRTY_FFPROBE_BIN", value = "/usr/bin/ffprobe" },
+      ]
+
+      # copyparty expands ${ADMIN_PW}/${CONSUMER_PW} in its argv at startup
+      secrets = [
+        { name = "ADMIN_PW", valueFrom = aws_ssm_parameter.admin_password.arn },
+        { name = "CONSUMER_PW", valueFrom = aws_ssm_parameter.consumer_password.arn },
       ]
 
       logConfiguration = {
